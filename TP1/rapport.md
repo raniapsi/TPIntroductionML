@@ -131,6 +131,20 @@ Le réseau comporte une couche d'entrée de 3 neurones, une couche cachée de 4 
 
 ![Schéma du perceptron multicouche avec 3 entrées, 4 neurones cachés et 2 sorties](images/schema-mlp.png)
 
-Entre la couche d'entrée et la couche cachée, il y a `3 × 4 = 12` poids. Entre la couche cachée et la couche de sortie, il y a `4 × 2 = 8` poids. Le réseau possède donc `12 + 8 = 20` paramètres sans les biais.
+Calcul détaillé sans les biais :
 
-La couche cachée possède 4 biais et la couche de sortie en possède 2. Le modèle contient donc au total `20 + 4 + 2 = 26` paramètres avec les biais.
+```text
+Couche 1 (entrée → couche cachée) : 3 × 4 = 12 poids
+Couche 2 (couche cachée → sortie) : 4 × 2 = 8 poids
+Total sans biais : 12 + 8 = 20 paramètres
+```
+
+Calcul détaillé avec les biais :
+
+```text
+Couche 1 : (3 × 4) + 4 biais = 12 + 4 = 16 paramètres
+Couche 2 : (4 × 2) + 2 biais = 8 + 2 = 10 paramètres
+Total avec biais : 16 + 10 = 26 paramètres
+```
+
+La couche d'entrée ne possède pas de biais appris : les biais appartiennent aux neurones des couches cachée et de sortie.
