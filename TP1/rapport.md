@@ -122,3 +122,15 @@ J'ai affiché la version de TensorBoard avec :
 ```
 
 La version installée est **2.20.0**.
+
+## 3. Exercices théoriques
+
+### Architecture et paramètres
+
+Le réseau comporte une couche d'entrée de 3 neurones, une couche cachée de 4 neurones et une couche de sortie de 2 neurones. Chaque neurone d'une couche est relié à tous les neurones de la couche suivante.
+
+![Schéma du perceptron multicouche avec 3 entrées, 4 neurones cachés et 2 sorties](images/schema-mlp.png)
+
+Entre la couche d'entrée et la couche cachée, il y a `3 × 4 = 12` poids. Entre la couche cachée et la couche de sortie, il y a `4 × 2 = 8` poids. Le réseau possède donc `12 + 8 = 20` paramètres sans les biais.
+
+La couche cachée possède 4 biais et la couche de sortie en possède 2. Le modèle contient donc au total `20 + 4 + 2 = 26` paramètres avec les biais.
