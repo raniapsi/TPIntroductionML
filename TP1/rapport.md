@@ -9,7 +9,7 @@ Question 1.c :
 Depuis mon Mac, je me suis connectée au cluster avec ssh tsp-client.
 Sur la machine de connexion, la commande `nvidia-smi` a échoué avec le message : Command 'nvidia-smi' not found.
 
-J'ai ensuite demandé une session interactive avec un GPU, un CPU et 8 Go de mémoire pour une durée maximale d'une heure comme ce qui était écrit sur l'énoncée:
+J'ai ensuite demandé une session interactive avec un GPU, un CPU et 8 Go de mémoire pour une durée maximale d'une heure comme ce qui était écrit dans l'énoncé :
 
 ```bash
 srun --partition=gpu --gres=gpu:1 --time=01:00:00 --cpus-per-task=1 --mem=8G --pty bash
@@ -25,7 +25,7 @@ Sur ce nœud, j'ai exécuté `nvidia-smi`. Le GPU attribué est une **NVIDIA L4*
 
 Question 1.d :
 
-Comme dans l'énoncé j'zi affiché mes jobs avec squeue -u $USER. Le job interactif 1759 était dans l'état `R` (en cours d'exécution). Pour l'annuler, j'ai utilisé :
+Comme dans l'énoncé, j'ai affiché mes jobs avec squeue -u $USER. Le job interactif 1759 était dans l'état `R` (en cours d'exécution). Pour l'annuler, j'ai utilisé :
 
 ```bash
 scancel 1759
@@ -45,20 +45,20 @@ Il contient les informations du GPU NVIDIA L4 et le message « Bonjour depuis SL
 
 ### Analyse du job terminé
 
-Question 1.g :
+Question 1.f :
 
 ```bash
 sacct -j 1778 --format=JobID,State,Elapsed,MaxRSS,ReqMem,ReqCPUS
 ```
 
-Premierement, on a ReqMem qui est la mémoire RAM demandé. En revanche, MaxRSS est le maximum de mémoire résidente qui est mesuré par Slurm.
-J'ai démandé ResMem = 8G de RAM et 1 CPU. Et 1888.barch affiche MaxRSS = 17900 K.
+Premièrement, on a ReqMem qui est la mémoire RAM demandée. En revanche, MaxRSS est le maximum de mémoire résidente qui est mesuré par Slurm.
+J'ai demandé ReqMem = 8G de RAM et 1 CPU. Et 1778.batch affiche MaxRSS = 17900K, soit environ 17,5 Mio.
 
 ## 2. Environnement Python
 
 ### Activation et vérification de Python
 
-Question 2.C :
+Question 2.b :
 
 Après une interruption de la création de l'environnement, j'ai terminé l'installation de Python avec :
 
@@ -66,7 +66,7 @@ Après une interruption de la création de l'environnement, j'ai terminé l'inst
 ~/miniforge3/bin/mamba install -n deeplearning python=3.10
 ```
 
-L'installation s'est terminée avec le message que la transition est fini. J'ai ensuite activé l'environnement :
+L'installation s'est terminée avec le message que la transaction est terminée. J'ai ensuite activé l'environnement :
 
 ```bash
 source ~/miniforge3/etc/profile.d/conda.sh
@@ -95,7 +95,7 @@ Le chemin confirme que le Python utilisé appartient à l'environnement `deeplea
 
 ### Vérification de PyTorch et CUDA
 
-L'installation initiale avait sélectionné une variante CPU de PyTorch. J'ai sélectionné PyTorch 2.5.1 avec CUDA 12.1, torchvision 0.20.1 et torchaudio 2.5.1 depuis le canal pytorch. Ensuite après la fin de l'installation, j'ai exécuté :
+L'installation initiale avait sélectionné une variante CPU de PyTorch. J'ai sélectionné PyTorch 2.5.1 avec CUDA 12.1, torchvision 0.20.1 et torchaudio 2.5.1 depuis le canal pytorch. Après la fin de l'installation, j'ai exécuté :
 
 ```bash
 ~/miniforge3/envs/deeplearning/bin/python ~/CSC8607/TP1/check_gpu.py
@@ -112,7 +112,7 @@ Device 0 name: NVIDIA L4
 
 PyTorch détecte un "GPU NVIDIA L4" et indique que CUDA est disponible.
 
-Mais je pense que si il ne serait pas disponible comme indiquer dans l'énoncé, c'est que toutes ressources seraient utilisé par les autres élèves ou que je dois réactiver mon environement ?
+Si `CUDA available` avait retourné `False`, deux causes possibles auraient été l'installation d'une version CPU de PyTorch ou l'exécution du script sur la machine de connexion sans réservation d'un nœud avec GPU.
 
 ![Vérification de PyTorch 2.5.1 et détection du GPU NVIDIA L4 avec CUDA](images/verification-pytorch-cuda.png)
 
@@ -192,7 +192,7 @@ Y  : (N, 2)
 
 ### Graphe de calcul et rétropropagation
 
-Question 4.b :
+Question 3.c :
 
 On considère la fonction :
 
@@ -293,19 +293,34 @@ En PyTorch, `BCEWithLogitsLoss` combine la sigmoïde et la BCE, tandis que `Cros
 
 ### Préparation des données
 
+Question 4.a :
+
 L'argument `batch_size` indique le nombre d'images traitées ensemble avant de calculer la perte et de mettre à jour les poids du réseau. Avec `batch_size=32`, le modèle traite donc les images par groupes de 32.
 
-L'argument `shuffle` indique si les données sont mélangées avant chaque parcours du jeu de données. Pour l'entraînement, `shuffle=True` évite que le modèle apprenne l'ordre des exemples et rend les mini-batchs plus variés. Pour le test, `shuffle=False` conserve un ordre stable, car aucun apprentissage ni aucune mise à jour des poids n'est effectué et le mélange ne modifierait pas la précision finale.
+L'argument `shuffle` comme vu lors de l'entraînement au CC1 permet d'indiquer si les données sont mélangées avant chaque parcours du jeu de données.
+
+Pour l'entraînement, `shuffle=True` évite que le modèle apprenne l'ordre des exemples et rend les mini-batchs plus variés.
+
+Pour le test, `shuffle=False` conserve un ordre stable, car aucun apprentissage ni aucune mise à jour des poids n'est effectué et le mélange ne modifierait pas la précision finale.
 
 ### Implémentation du réseau
 
-Dans la méthode `forward`, `torch.flatten(x, 1)` transforme chaque image de taille `3 × 32 × 32` en un vecteur de `3072` valeurs, format attendu par la première couche linéaire. L'argument `1` indique que l'aplatissement commence à la dimension 1 : la dimension 0, qui représente le nombre d'images du batch, est donc conservée. Une entrée de forme `(batch_size, 3, 32, 32)` devient ainsi `(batch_size, 3072)`.
+Question 4.b :
 
-Il ne faut pas ajouter `Softmax` à la sortie du réseau lorsque `nn.CrossEntropyLoss` est utilisée. Cette fonction de perte attend directement les scores bruts, appelés *logits*, et applique elle-même une opération équivalente à `LogSoftmax` de manière numériquement stable. Ajouter `Softmax` dans le modèle effectuerait une transformation inutile avant la perte et pourrait produire des gradients moins efficaces pour l'apprentissage.
+Dans la méthode `forward`, `torch.flatten(x, 1)` transforme chaque image de taille `3 × 32 × 32` en un vecteur de `3072` valeurs c'est le format attendu par la première couche linéaire.
+L'argument `1` indique que l'aplatissement commence à la dimension 1 : la dimension 0, qui représente le nombre d'images du batch, est donc conservée. Une entrée de forme `(batch_size, 3, 32, 32)` devient ainsi `(batch_size, 3072)`.
+
+Il ne faut pas ajouter `Softmax` à la sortie du réseau lorsque `nn.CrossEntropyLoss` est utilisée. Elle attend déjà les logits et applique elle-même Softmax. Ajouter un Softmax par-dessus effectuerait une transformation inutile et pourrait produire des gradients moins utiles à l'apprentissage.
+
+Question 4.c :
+
+La différence entre optimizer.zero_grad() et loss.backward() est que le premier sert à remettre à 0 le calcul des gradients pour ne pas garder les précédents sinon ils seront additionnés et tout le calcul sera faux. Le deuxième permet de commencer le calcul des gradients à partir de la loss.
 
 ### Évaluation sur le jeu de test
 
-Le bloc `with torch.no_grad():` désactive le calcul et la mémorisation des gradients pendant l'évaluation. Les gradients sont nécessaires pour la rétropropagation et la mise à jour des poids pendant l'entraînement, mais aucune mise à jour n'est effectuée sur le jeu de test. Leur désactivation réduit donc l'utilisation de la mémoire, accélère les calculs et évite de construire inutilement le graphe de rétropropagation.
+Question 4.d :
+
+On utilise le bloc with torch.no_grad() pour ne pas recalculer les gradients comme à l'entraînement. Cela ne sert plus du tout à rien lors de l'évaluation. Cela permet d'utiliser moins de mémoire sur le GPU, ne construit pas le graphe de calcul et fait les calculs donc plus rapidement.
 
 CIFAR-10 contient 10 classes. Un classificateur qui choisit uniformément une classe au hasard a une chance sur 10 de trouver la bonne réponse. Sa précision attendue est donc d'environ `1/10 = 0,10`, soit **10 %**.
 
@@ -327,17 +342,16 @@ Epoch 10 | loss=1.9462 | acc=0.4248
 Test accuracy: 0.387
 ```
 
-La précision d'entraînement atteint environ **42,48 %** après 10 époques et la précision de test est de **38,7 %**. Cette dernière est supérieure aux 10 % attendus pour une prédiction aléatoire, ce qui confirme que le modèle a appris à reconnaître une partie des images. Les poids ont été sauvegardés dans `mlp_model.pth`.
+Après 10 époques, le modèle obtient 42,48 % de précision à l’entraînement et 38,7 % au test. Il fait donc mieux qu’un choix aléatoire à 10 %. Ses poids sont enregistrés dans mlp_model.pth.
 
-### Réinitialisation et calcul des gradients
-
-`optimizer.zero_grad()` efface les gradients conservés depuis l'itération précédente. Cette remise à zéro est nécessaire parce que PyTorch additionne les gradients par défaut. `loss.backward()` effectue ensuite la rétropropagation afin de calculer les nouveaux gradients de la perte par rapport aux paramètres du modèle. La première commande efface donc les anciens gradients, tandis que la seconde calcule les gradients du batch actuel.
 
 ## 5. Utilisation de TensorBoard
 
 ### Préparation et premier entraînement
 
-La date, l'heure et les hyperparamètres sont inclus dans `run_name` afin d'identifier précisément chaque entraînement, d'éviter d'écraser les résultats précédents et de faciliter la comparaison des expériences dans TensorBoard.
+Question 5.a :
+
+La date, l'heure et les hyperparamètres sont inclus dans `run_name` pour identifier précisément chaque entraînement, éviter d'écraser les résultats précédents et faciliter la comparaison des expériences dans TensorBoard.
 
 Le premier run utilise `batch_size=32` et `lr=0.01`. Les logs ont été enregistrés dans `runs/MLP/bs32_lr0.01_20260922-211924`. Les résultats sont :
 
@@ -360,7 +374,7 @@ La meilleure précision de validation de ce run est **38,9 %**, obtenue à l'ép
 
 ### Visualisation dans TensorBoard
 
-Dans l'onglet `Scalars`, un niveau de smoothing de **0,6** permet de distinguer clairement la tendance de `Loss/train_step` sans masquer complètement les variations importantes. La courbe `Loss/train_step` est plus bruitée parce que chaque point correspond à la perte d'un seul mini-batch de 32 images : certains lots sont plus faciles ou plus difficiles que d'autres. À l'inverse, `Loss/train` est calculée comme une moyenne sur tous les mini-batchs d'une époque, ce qui réduit fortement les fluctuations.
+Dans l'onglet `Scalars`, un niveau de smoothing de **0,6** permet de distinguer clairement la tendance de `Loss/train_step` sans masquer complètement les variations importantes. La courbe `Loss/train_step` est plus bruitée parce que chaque point correspond à la perte d'un seul mini-batch de 32 images. Ainsi certains lots sont plus faciles ou plus difficiles que d'autres. À l'inverse, `Loss/train` est calculée comme une moyenne sur tous les mini-batchs d'une époque, ce qui réduit fortement les fluctuations.
 
 ### Deuxième run
 
@@ -410,12 +424,14 @@ Epoch 10 | train_loss=nan | val_loss=nan | val_acc=0.096
 | 2 | 32 | 0.001 | 51,6 % | Meilleur résultat |
 | 3 | 128 | 0.1 | 9,6 % | Divergence, pertes égales à `nan` |
 
-Le deuxième run obtient la meilleure précision de validation avec **51,6 %**. Le troisième run montre qu'un taux d'apprentissage trop élevé peut rendre l'entraînement numériquement instable. Le batch plus grand ne permet pas de compenser un taux d'apprentissage aussi élevé.
+Le deuxième run obtient la meilleure précision de validation avec **51,6 %**.
+Le troisième run montre qu'un taux d'apprentissage trop élevé peut rendre l'entraînement numériquement instable.
+Le batch plus grand ne permet pas de compenser un taux d'apprentissage aussi élevé.
 
 ### Comparaison graphique dans TensorBoard
 
 ![Comparaison des trois configurations dans TensorBoard](images/tensorboard-comparaison-runs.png)
 
-La courbe rose, correspondant à `batch_size=32` et `lr=0.001`, donne les meilleurs résultats. Sa précision de validation progresse jusqu'à environ **51,6 %**, tandis que ses pertes d'entraînement et de validation diminuent globalement. Les courbes du premier réglage, `batch_size=32` et `lr=0.01`, restent autour de **38 %** de précision et présentent davantage de fluctuations. La courbe orange, `batch_size=128` et `lr=0.1`, reste proche de **9,6 %**, car le taux d'apprentissage trop élevé a fait diverger les calculs et produit des pertes `nan`.
+La courbe rose donne le meilleur résultat avec 51,6 % de précision. Le premier réglage atteint environ 38 %. Pour la courbe orange, le learning rate est trop élevé, donc le modèle n’arrive plus à apprendre et reste à 9,6 % de précision.
 
-Un surapprentissage peut être détecté lorsque la perte d'entraînement continue de diminuer alors que la perte de validation commence à augmenter, souvent accompagnée d'une stagnation ou d'une baisse de la précision de validation. Pour le deuxième run, la perte d'entraînement diminue régulièrement. La perte de validation se stabilise autour de 1,46 après quelques époques, sans forte augmentation sur les dix époques observées : il n'y a donc pas encore de surapprentissage très marqué, même si l'écart entre les deux pertes commence à grandir.
+On détecte un surapprentissage lorsque le modèle continue de progresser sur les données d’entraînement, mais devient moins performant sur les données de validation. Dans ce cas, la perte d’entraînement baisse tandis que la perte de validation augmente et que la précision de validation stagne ou diminue. Pour notre deuxième essai, la perte d’entraînement diminue régulièrement et la perte de validation reste proche de 1,46. Il n’y a donc pas encore de surapprentissage important, même si un petit écart commence à apparaître entre les deux courbes.
