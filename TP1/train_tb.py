@@ -8,11 +8,11 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms, datasets
 
 
-# Hyperparamètres de cet entraînement
+# Meilleure configuration obtenue pendant le mini-sweep
 hparams = {
     "model": "MLP",
-    "batch_size": 128,
-    "lr": 1e-1,
+    "batch_size": 32,
+    "lr": 1e-3,
     "seed": 0,
     "weight_decay": 0.0,
 }

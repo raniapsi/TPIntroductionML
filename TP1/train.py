@@ -1,6 +1,9 @@
 import os
+import random
+
 import torch
-import torchvision
+import torch.nn as nn
+import torch.nn.functional as F
 from torchvision import transforms, datasets
 
 # Normalisation classique pour CIFAR-10
@@ -12,7 +15,6 @@ transform = transforms.Compose([
     transforms.Normalize(CIFAR10_MEAN, CIFAR10_STD),
 ])
 
-# Jeu utilisé pour entraîner le modèle
 trainset = datasets.CIFAR10(
     root="./data",
     train=True,
@@ -20,7 +22,6 @@ trainset = datasets.CIFAR10(
     transform=transform
 )
 
-# Jeu utilisé pour évaluer le modèle
 testset = datasets.CIFAR10(
     root="./data",
     train=False,
@@ -52,8 +53,6 @@ testloader = torch.utils.data.DataLoader(
     num_workers=num_workers,
     pin_memory=True
 )
-import torch.nn as nn
-import torch.nn.functional as F
 
 
 class MLP(nn.Module):
@@ -65,17 +64,11 @@ class MLP(nn.Module):
         self.fc2 = nn.Linear(128, 10)
 
     def forward(self, x):
-        # Transformer chaque image en une ligne de 3072 valeurs
+        # Une ligne de 3072 valeurs par image
         x = torch.flatten(x, 1)
-
-        # Couche cachée et fonction ReLU
         x = F.relu(self.fc1(x))
-
-        # 10 scores, un pour chaque classe CIFAR-10
         x = self.fc2(x)
-
         return x
-import random
 
 # Fixer les graines pour obtenir des résultats reproductibles
 torch.manual_seed(0)
@@ -85,16 +78,11 @@ if torch.cuda.is_available():
 
 random.seed(0)
 
-# Utiliser le GPU s’il est disponible
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using device: {device}")
 
 model = MLP().to(device)
-
-# Fonction qui mesure l’erreur du modèle
 criterion = nn.CrossEntropyLoss()
-
-# Algorithme qui met à jour les poids
 optimizer = torch.optim.SGD(
     model.parameters(),
     lr=0.01,
@@ -114,19 +102,10 @@ for epoch in range(EPOCHS):
         inputs = inputs.to(device, non_blocking=True)
         labels = labels.to(device, non_blocking=True)
 
-        # 1. Effacer les anciens gradients
         optimizer.zero_grad(set_to_none=True)
-
-        # 2. Faire les prédictions
         outputs = model(inputs)
-
-        # 3. Calculer l’erreur
         loss = criterion(outputs, labels)
-
-        # 4. Calculer les gradients
         loss.backward()
-
-        # 5. Mettre à jour les poids
         optimizer.step()
 
         # Calcul des statistiques
