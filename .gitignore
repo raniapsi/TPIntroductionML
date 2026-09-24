@@ -1,2 +1,6 @@
 TP1/rapport.md
 TP1/images/
+TP1/runs/
+.tensorboard-env/
+__pycache__/
+*.py[cod]
