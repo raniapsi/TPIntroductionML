@@ -2,7 +2,7 @@
 
 Dans ce TP, je travaille sur la classification de données cardiovasculaires avec PyTorch. L’objectif est de préparer les données, puis d’étudier les régularisations L1/L2, de comparer plusieurs optimiseurs et d’évaluer les prédictions du modèle.
 
-> Rapport en cours : la préparation des données a été vérifiée sur le cluster. Les expériences d’entraînement restent à réaliser.
+> Rapport en cours : la préparation des données et la première expérience avec régularisation faible ont été exécutées sur le cluster. La comparaison avec L1 forte et les autres expériences restent à réaliser.
 
 ## 1. Dataset personnalisé
 
@@ -82,7 +82,25 @@ python train.py --l1 0.1 --l2 0
 
 Le script enregistre les résultats par époque dans `results/` au format CSV et dans `runs/` pour TensorBoard. Il distingue l’objectif avec pénalités de la BCE seule, afin de comparer les performances prédictives malgré des coefficients de régularisation différents. L’accuracy est calculée au seuil de 0,5. L’ensemble de test n’est pas utilisé à cette étape.
 
-**Observations :** à compléter après les deux exécutions sur le cluster.
+### Résultats avec une régularisation faible
+
+J’ai exécuté `python train.py --l1 0.0001 --l2 0.001` sur le GPU du cluster pendant 10 époques. Le script confirme l’utilisation de CUDA et de 16 variables en entrée.
+
+![Entraînement sur le cluster avec une régularisation faible L1 et L2](images/regularisation-faible-cluster.png)
+
+| Mesure | Époque 1 | Époque 10 |
+| --- | ---: | ---: |
+| Objectif avec pénalités, moyenne pendant l’époque | 0,8438 | 0,7314 |
+| BCE entraînement, en fin d’époque | 0,6348 | 0,5968 |
+| Accuracy entraînement | 64,57 % | 68,99 % |
+| BCE validation | 0,6272 | 0,5835 |
+| Accuracy validation | 66,09 % | 70,03 % |
+
+La BCE diminue sur l’entraînement et sur la validation. L’accuracy de validation progresse de 3,94 points de pourcentage. Le réseau apprend donc des relations utiles avec ces coefficients de régularisation. Sur les 10 époques observées, la perte de validation ne remonte pas : ces résultats ne montrent pas de signe manifeste de surapprentissage.
+
+L’accuracy de validation est légèrement supérieure à celle d’entraînement. Cela peut notamment être lié aux différences entre les exemples des deux ensembles ; cet écart seul ne permet pas de conclure à un problème. L’ensemble de test reste réservé à l’évaluation finale.
+
+**Comparaison avec L1 forte :** à compléter après l’exécution avec `--l1 0.1 --l2 0`. Les valeurs ci-dessus sont transcrites depuis la capture ; les historiques CSV et TensorBoard complets sont enregistrés sur le cluster.
 
 ### Effet attendu d’une régularisation trop forte
 
