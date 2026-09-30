@@ -2,3 +2,10 @@ TP1/runs/
 .tensorboard-env/
 __pycache__/
 *.py[cod]
+
+# TP2 : données et sorties générées
+TP2/data/*
+!TP2/data/.gitkeep
+TP2/runs/
+TP2/checkpoints/
+TP2/logs/

@@ -1,0 +1,5 @@
+numpy
+pandas
+scikit-learn
+tensorboard
+# PyTorch est déjà fourni par l’environnement deeplearning du TP1.
