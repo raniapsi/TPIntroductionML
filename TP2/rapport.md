@@ -61,7 +61,40 @@ Pour la suite, la dimension d’entrée du MLP sera déterminée à partir des d
 
 ## 2. MLP et régularisations L1/L2
 
-À faire : implémentation, expérience avec L1 forte, observations et réponses théoriques.
+### Architecture et fonction de coût
+
+Le script `train.py` définit un MLP avec 16 entrées, deux couches cachées de 128 neurones avec activation ReLU, puis une sortie avec activation sigmoïde. Cette sortie représente la probabilité de la classe 1. La fonction de perte utilisée est la binary cross-entropy (`BCELoss`).
+
+L’objectif optimisé ajoute deux pénalités à cette perte :
+
+$$J = \mathrm{BCE} + \lambda_1 \sum_p |p| + \lambda_2 \sum_p p^2.$$
+
+Comme dans le code de l’énoncé, ces sommes portent sur tous les paramètres, biais compris. À chaque batch, `zero_grad()` efface les gradients précédents, `backward()` calcule les nouveaux gradients et `step()` met à jour les paramètres.
+
+### Protocole de comparaison
+
+Deux expériences sont préparées avec SGD, un taux d’apprentissage de 0,01, 10 époques et la même graine :
+
+```bash
+python train.py --l1 0.0001 --l2 0.001
+python train.py --l1 0.1 --l2 0
+```
+
+Le script enregistre les résultats par époque dans `results/` au format CSV et dans `runs/` pour TensorBoard. Il distingue l’objectif avec pénalités de la BCE seule, afin de comparer les performances prédictives malgré des coefficients de régularisation différents. L’accuracy est calculée au seuil de 0,5. L’ensemble de test n’est pas utilisé à cette étape.
+
+**Observations :** à compléter après les deux exécutions sur le cluster.
+
+### Effet attendu d’une régularisation trop forte
+
+Une pénalité trop forte peut empêcher le réseau d’apprendre les relations utiles : c’est le sous-apprentissage (underfitting). Il faudra vérifier cet effet dans les pertes et les accuracies mesurées, sans le confondre avec la hausse mécanique de l’objectif due à la pénalité.
+
+### Régularisation L2 dans l’optimiseur
+
+Avec `torch.optim.SGD`, l’argument `weight_decay` permet d’appliquer la régularisation L2. Pour reproduire une pénalité écrite sous la forme `l2_lambda * somme(p²)`, le coefficient équivalent est `weight_decay=2*l2_lambda`, car la dérivée de cette pénalité est `2*l2_lambda*p`. Il ne faut pas cumuler les deux mécanismes pour la même pénalité.
+
+### Différence entre L1 et L2
+
+La régularisation L1 favorise des paramètres nuls ou proches de zéro et peut produire une solution parcimonieuse. L2 réduit les grandes valeurs des paramètres de manière plus progressive, sans favoriser autant leur annulation. Avec les mises à jour SGD utilisées ici, L1 ne garantit pas des zéros exacts.
 
 ## 3. Optimiseurs et TensorBoard
 
