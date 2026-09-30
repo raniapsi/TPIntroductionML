@@ -2,7 +2,7 @@
 
 Dans ce TP, je travaille sur la classification de données cardiovasculaires avec PyTorch. L’objectif est de préparer les données, puis d’étudier les régularisations L1/L2, de comparer plusieurs optimiseurs et d’évaluer les prédictions du modèle.
 
-> Rapport en cours : la préparation des données et la première expérience avec régularisation faible ont été exécutées sur le cluster. La comparaison avec L1 forte et les autres expériences restent à réaliser.
+> Rapport en cours : la préparation des données et la première expérience avec régularisation faible ont été exécutées sur le cluster. La comparaison avec L1 forte est également terminée. La comparaison des optimiseurs et l’évaluation finale restent à réaliser.
 
 ## 1. Dataset personnalisé
 
@@ -100,11 +100,28 @@ La BCE diminue sur l’entraînement et sur la validation. L’accuracy de valid
 
 L’accuracy de validation est légèrement supérieure à celle d’entraînement. Cela peut notamment être lié aux différences entre les exemples des deux ensembles ; cet écart seul ne permet pas de conclure à un problème. L’ensemble de test reste réservé à l’évaluation finale.
 
-**Comparaison avec L1 forte :** à compléter après l’exécution avec `--l1 0.1 --l2 0`. Les valeurs ci-dessus sont transcrites depuis la capture ; les historiques CSV et TensorBoard complets sont enregistrés sur le cluster.
+### Résultats avec une régularisation L1 forte
+
+J’ai ensuite lancé `python train.py --l1 0.1 --l2 0`, avec la même initialisation et le même découpage des données.
+
+![Entraînement sur le cluster avec L1 à 0,1 et L2 à zéro](images/regularisation-forte-cluster.png)
+
+L’objectif total passe de 6,6698 à la première époque à 1,6340 dès la deuxième époque, puis reste stable à la précision affichée. Pourtant, la BCE d’entraînement reste à 0,6931 et l’accuracy de validation oscille entre 49,86 % et 50,14 %. La baisse de l’objectif ne correspond donc pas ici à une amélioration des prédictions : elle est principalement liée à la diminution de la pénalité.
+
+| Mesure à l’époque 10 | L1 = 0,0001 et L2 = 0,001 | L1 = 0,1 et L2 = 0 |
+| --- | ---: | ---: |
+| BCE entraînement | 0,5968 | 0,6931 |
+| Accuracy entraînement | 68,99 % | 50,03 % |
+| BCE validation | 0,5835 | 0,6931 |
+| Accuracy validation | 70,03 % | 49,86 % |
+
+Avec la régularisation forte, l’accuracy de validation perd 20,17 points de pourcentage. La BCE est proche de `ln(2) ≈ 0,6931`, valeur obtenue avec des probabilités de 0,5. Ces observations sont cohérentes avec un modèle peu informatif. Le réseau ne réussit pas non plus sur l’entraînement : c’est du **sous-apprentissage**. La pénalité L1 exerce une pression trop forte vers des paramètres proches de zéro et empêche l’apprentissage de relations utiles.
+
+Les valeurs sont transcrites depuis les captures. Les historiques CSV et TensorBoard complets sont enregistrés sur le cluster.
 
 ### Effet attendu d’une régularisation trop forte
 
-Une pénalité trop forte peut empêcher le réseau d’apprendre les relations utiles : c’est le sous-apprentissage (underfitting). Il faudra vérifier cet effet dans les pertes et les accuracies mesurées, sans le confondre avec la hausse mécanique de l’objectif due à la pénalité.
+Une pénalité trop forte peut empêcher le réseau d’apprendre les relations utiles : c’est le sous-apprentissage (underfitting). Cet effet est observé dans notre expérience avec L1 à 0,1. Il faut distinguer la BCE seule de l’objectif total qui inclut la pénalité.
 
 ### Régularisation L2 dans l’optimiseur
 
@@ -116,7 +133,15 @@ La régularisation L1 favorise des paramètres nuls ou proches de zéro et peut 
 
 ## 3. Optimiseurs et TensorBoard
 
-À faire : comparer SGD, Momentum, RMSprop et Adam ; insérer la capture et commenter les courbes.
+Le script propose les optimiseurs SGD, SGD avec momentum de 0,9, RMSprop et Adam. La comparaison préparée utilise 30 époques, un taux d’apprentissage commun de 0,001 et aucune pénalité L1/L2, comme dans cette partie de l’énoncé. Chaque expérience réinitialise le réseau et les DataLoaders avec la même graine pour comparer les optimiseurs dans les mêmes conditions.
+
+```bash
+python train.py --compare --epochs 30 --lr 0.001 --l1 0 --l2 0
+```
+
+La BCE d’entraînement, la BCE de validation et les accuracies sont enregistrées dans TensorBoard. Le meilleur état de chaque réseau selon la BCE de validation est conservé pour la future évaluation. Aucun choix ne repose sur le test.
+
+**Résultats et capture TensorBoard :** à compléter après exécution. Un taux commun permet cette comparaison, mais ne garantit pas le réglage optimal de chaque optimiseur.
 
 ## 4. Métriques
 

@@ -1,6 +1,7 @@
 """Entraînement du MLP avec régularisation L1/L2 explicite."""
 import argparse
 import csv
+import json
 from datetime import datetime
 from pathlib import Path
 
@@ -40,7 +41,7 @@ def measure(model, loader, criterion, device):
     return loss_sum / count, correct / count
 
 
-def train_model(l1_lambda=1e-4, l2_lambda=1e-3, epochs=10, lr=0.01, seed=42):
+def train_model(l1_lambda=1e-4, l2_lambda=1e-3, epochs=10, lr=0.01, seed=42, optimizer_name="SGD"):
     torch.manual_seed(seed)
     torch.set_num_threads(1)
     if torch.cuda.is_available():
@@ -50,12 +51,25 @@ def train_model(l1_lambda=1e-4, l2_lambda=1e-3, epochs=10, lr=0.01, seed=42):
     input_size = train_loader.dataset.dataset.features.shape[1]
     model = MLP(input_size).to(device)
     criterion = nn.BCELoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr=lr)
-    run_name = f'SGD_l1-{l1_lambda}_l2-{l2_lambda}_{datetime.now():%Y%m%d-%H%M%S-%f}'
+    factories = {
+        'SGD': lambda: torch.optim.SGD(model.parameters(), lr=lr),
+        'Momentum': lambda: torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9),
+        'RMSprop': lambda: torch.optim.RMSprop(model.parameters(), lr=lr),
+        'Adam': lambda: torch.optim.Adam(model.parameters(), lr=lr),
+    }
+    optimizer = factories[optimizer_name]()
+    run_name = f'{optimizer_name}_l1-{l1_lambda}_l2-{l2_lambda}_{datetime.now():%Y%m%d-%H%M%S-%f}'
     result_dir = ROOT / 'results' / run_name
     result_dir.mkdir(parents=True)
+    print(f'Optimiseur : {optimizer_name} | lr : {lr}', flush=True)
     print(f'Device : {device} | Entrées : {input_size} | L1 : {l1_lambda} | L2 : {l2_lambda}', flush=True)
     print(f'Résultats : {result_dir}', flush=True)
+    config = dict(optimizer=optimizer_name, lr=lr, l1=l1_lambda, l2=l2_lambda,
+                  epochs=epochs, seed=seed, input_size=input_size, hidden_size=128)
+    (result_dir / 'config.json').write_text(json.dumps(config, indent=2))
+    checkpoint_dir = ROOT / 'checkpoints' / run_name
+    checkpoint_dir.mkdir(parents=True)
+    best_val = float('inf')
     fields = ['epoch', 'objective', 'train_bce', 'train_accuracy', 'val_bce', 'val_accuracy']
     with SummaryWriter(str(ROOT / 'runs' / run_name)) as writer, (result_dir / 'history.csv').open('w', newline='') as output:
         table = csv.DictWriter(output, fieldnames=fields)
@@ -77,6 +91,10 @@ def train_model(l1_lambda=1e-4, l2_lambda=1e-3, epochs=10, lr=0.01, seed=42):
                 count += len(y)
             train_bce, train_accuracy = measure(model, train_loader, criterion, device)
             val_bce, val_accuracy = measure(model, val_loader, criterion, device)
+            if val_bce < best_val:
+                best_val = val_bce
+                torch.save(dict(model_state=model.state_dict(), config=config,
+                                epoch=epoch, val_bce=val_bce), checkpoint_dir / 'best.pt')
             row = dict(epoch=epoch, objective=objective_sum / count,
                        train_bce=train_bce, train_accuracy=train_accuracy,
                        val_bce=val_bce, val_accuracy=val_accuracy)
@@ -88,6 +106,7 @@ def train_model(l1_lambda=1e-4, l2_lambda=1e-3, epochs=10, lr=0.01, seed=42):
             print(f'Epoch {epoch:02d}/{epochs} | objectif={row["objective"]:.4f} '
                   f'| train BCE={train_bce:.4f} acc={train_accuracy:.4f} '
                   f'| val BCE={val_bce:.4f} acc={val_accuracy:.4f}', flush=True)
+    print(f'Meilleure BCE validation : {best_val:.4f} | Modèle : {checkpoint_dir / "best.pt"}', flush=True)
     return model
 
 
@@ -97,7 +116,11 @@ if __name__ == '__main__':
     parser.add_argument('--l2', type=float, default=1e-3)
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--lr', type=float, default=0.01)
+    parser.add_argument('--optimizer', choices=['SGD', 'Momentum', 'RMSprop', 'Adam'], default='SGD')
+    parser.add_argument('--compare', action='store_true', help='Exécuter les quatre optimiseurs avec les paramètres fournis.')
     args = parser.parse_args()
     if args.epochs < 1 or args.lr <= 0 or args.l1 < 0 or args.l2 < 0:
         parser.error('epochs et lr doivent être positifs ; l1 et l2 doivent être positifs ou nuls.')
-    train_model(args.l1, args.l2, args.epochs, args.lr)
+    optimizers = ['SGD', 'Momentum', 'RMSprop', 'Adam'] if args.compare else [args.optimizer]
+    for name in optimizers:
+        train_model(args.l1, args.l2, args.epochs, args.lr, optimizer_name=name)
