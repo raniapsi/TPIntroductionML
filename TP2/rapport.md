@@ -1,8 +1,16 @@
 # TP2 — Régularisation, optimisation et métriques
 
-> Rapport en cours. Aucune expérience d’entraînement n’a encore été exécutée.
+Dans ce TP, je travaille sur la classification de données cardiovasculaires avec PyTorch. L’objectif est de préparer les données, puis d’étudier les régularisations L1/L2, de comparer plusieurs optimiseurs et d’évaluer les prédictions du modèle.
+
+> Rapport en cours : la préparation des données a été vérifiée sur le cluster. Les expériences d’entraînement restent à réaliser.
 
 ## 1. Dataset personnalisé
+
+### Chargement et préparation des données
+
+J’ai placé le fichier `cardio_train.csv` dans `TP2/data/`. Le script `dataset.py` lit le CSV avec le séparateur `;`, applique la suppression des doublons prévue dans le code et retire la colonne `id`. La colonne `cardio` sert de cible : 0 pour l’absence de maladie cardiovasculaire et 1 pour sa présence.
+
+Les variables catégorielles `gender`, `cholesterol` et `gluc` sont transformées par encodage one-hot : une colonne indicatrice est créée pour chaque catégorie. Après cette préparation, chaque patient est représenté par 16 variables.
 
 ### Interface PyTorch
 
@@ -26,7 +34,30 @@ Cette classe ne suffit pas seule : la lecture doit aussi éviter de tout charger
 
 ### Vérification sur le cluster
 
-À compléter après `python dataset.py` : tailles des ensembles et dimensions d’un batch.
+J’ai exécuté le premier script sur le nœud de calcul `starfighter-slurm-node-01-1`, dans le job Slurm 4628, avec l’environnement `deeplearning` :
+
+```bash
+source ~/miniforge3/etc/profile.d/conda.sh
+conda activate deeplearning
+cd ~/TPIntroductionML/TP2
+python dataset.py
+```
+
+![Exécution de dataset.py sur le cluster : tailles des ensembles et dimensions du premier batch](images/dataset-cluster.png)
+
+Le script affiche les résultats suivants :
+
+```text
+Tailles train / validation / test : [56000, 7000, 7000]
+Shape features: torch.Size([64, 16]) Shape labels: torch.Size([64, 1])
+Nombre de variables après encodage : 16
+```
+
+Les 70 000 exemples sont répartis en 56 000 exemples pour l’entraînement (80 %), 7 000 pour la validation (10 %) et 7 000 pour le test (10 %). Le découpage utilise une graine fixée à 42 pour être reproductible.
+
+La forme `[64, 16]` correspond à un batch de 64 patients possédant chacun 16 variables. La forme `[64, 1]` signifie que chaque patient est associé à un seul label binaire. Ces résultats confirment que le dataset et les DataLoaders peuvent fournir les lots attendus pour l’entraînement.
+
+Pour la suite, la dimension d’entrée du MLP sera déterminée à partir des données : elle vaut ici 16. Il ne faut donc pas reprendre la valeur fixe de 12 figurant dans l’un des exemples de l’énoncé.
 
 ## 2. MLP et régularisations L1/L2
 
