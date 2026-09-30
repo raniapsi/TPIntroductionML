@@ -2,7 +2,7 @@
 
 Dans ce TP, je travaille sur la classification de données cardiovasculaires avec PyTorch. L’objectif est de préparer les données, puis d’étudier les régularisations L1/L2, de comparer plusieurs optimiseurs et d’évaluer les prédictions du modèle.
 
-> Rapport en cours : la préparation des données et la première expérience avec régularisation faible ont été exécutées sur le cluster. La comparaison avec L1 forte est également terminée. La comparaison des optimiseurs et l’évaluation finale restent à réaliser.
+> Rapport en cours : la préparation des données et la première expérience avec régularisation faible ont été exécutées sur le cluster. La comparaison avec L1 forte est également terminée. Les quatre optimiseurs ont été entraînés. La capture TensorBoard et l’évaluation finale restent à réaliser.
 
 ## 1. Dataset personnalisé
 
@@ -133,7 +133,7 @@ La régularisation L1 favorise des paramètres nuls ou proches de zéro et peut 
 
 ## 3. Optimiseurs et TensorBoard
 
-Le script propose les optimiseurs SGD, SGD avec momentum de 0,9, RMSprop et Adam. La comparaison préparée utilise 30 époques, un taux d’apprentissage commun de 0,001 et aucune pénalité L1/L2, comme dans cette partie de l’énoncé. Chaque expérience réinitialise le réseau et les DataLoaders avec la même graine pour comparer les optimiseurs dans les mêmes conditions.
+Le script propose les optimiseurs SGD, SGD avec momentum de 0,9, RMSprop et Adam. La comparaison réalisée utilise 30 époques, un taux d’apprentissage commun de 0,001 et aucune pénalité L1/L2, comme dans cette partie de l’énoncé. Chaque expérience réinitialise le réseau et les DataLoaders avec la même graine pour comparer les optimiseurs dans les mêmes conditions.
 
 ```bash
 python train.py --compare --epochs 30 --lr 0.001 --l1 0 --l2 0
@@ -141,7 +141,46 @@ python train.py --compare --epochs 30 --lr 0.001 --l1 0 --l2 0
 
 La BCE d’entraînement, la BCE de validation et les accuracies sont enregistrées dans TensorBoard. Le meilleur état de chaque réseau selon la BCE de validation est conservé pour la future évaluation. Aucun choix ne repose sur le test.
 
-**Résultats et capture TensorBoard :** à compléter après exécution. Un taux commun permet cette comparaison, mais ne garantit pas le réglage optimal de chaque optimiseur.
+### Résultats des quatre optimiseurs
+
+Les quatre entraînements de 30 époques se sont terminés sur le cluster. Le tableau distingue les performances de la dernière époque de la meilleure BCE de validation enregistrée pendant l’entraînement.
+
+| Optimiseur | BCE train à l’époque 30 | BCE validation à l’époque 30 | Accuracy validation à l’époque 30 | Meilleure BCE validation |
+| --- | ---: | ---: | ---: | ---: |
+| SGD | 0,6239 | 0,6106 | 66,63 % | 0,6106 |
+| Momentum | 0,5589 | 0,5480 | 73,47 % | 0,5480 |
+| RMSprop | 0,5343 | 0,5410 | 73,13 % | 0,5358 |
+| Adam | 0,5378 | 0,5385 | 73,47 % | 0,5369 |
+
+Ces valeurs sont transcrites depuis les sorties du terminal. Les historiques complets restent disponibles dans les fichiers CSV et les événements TensorBoard sur le cluster.
+
+### Vitesse d’apprentissage initiale
+
+RMSprop et Adam réduisent beaucoup plus vite la perte que SGD. À la première époque, la perte moyenne pendant l’entraînement (`objectif`, égale ici à la BCE sans pénalité) vaut 0,5902 pour RMSprop, 0,5916 pour Adam, 0,6579 pour Momentum et 0,6885 pour SGD. Selon cette mesure, RMSprop a une légère avance sur Adam. En revanche, la BCE recalculée en fin de première époque sur tout le train est légèrement plus basse avec Adam (0,5794 contre 0,5800). Les deux optimiseurs adaptatifs ont donc des résultats initiaux très proches ; le classement dépend de la mesure retenue.
+
+### Effet du momentum
+
+Momentum atteint dès la troisième époque une BCE de validation de 0,6104, alors que SGD atteint 0,6106 après 30 époques. Le momentum conserve une contribution des gradients précédents, ce qui accélère la progression dans les directions persistantes et peut atténuer certaines oscillations. Dans notre expérience, il permet surtout une baisse de perte plus rapide et une meilleure accuracy finale que SGD simple.
+
+### Choix du modèle pour l’évaluation finale
+
+Le critère retenu est la plus faible BCE de validation au cours des 30 époques. RMSprop obtient 0,5358, légèrement devant Adam à 0,5369. Je retiens donc le checkpoint `best.pt` de RMSprop pour la future évaluation sur le test. Son accuracy à la dernière époque n’est pas celle de son meilleur checkpoint : il faut charger l’état sauvegardé, et non utiliser automatiquement le dernier état du réseau.
+
+L’écart entre RMSprop et Adam reste faible et cette comparaison ne porte que sur une graine et un taux d’apprentissage commun. Elle ne démontre pas qu’un optimiseur est systématiquement supérieur aux autres. Les pertes de validation des optimiseurs adaptatifs fluctuent, ce qui justifie de conserver le meilleur état selon la validation.
+
+### Captures des exécutions
+
+![SGD et début de Momentum](images/optimiseurs-cluster-1.png)
+
+![Fin de Momentum, RMSprop et début d’Adam](images/optimiseurs-cluster-2.png)
+
+![Historique de RMSprop et d’Adam](images/optimiseurs-cluster-3.png)
+
+![Fin de la comparaison et retour au terminal](images/optimiseurs-cluster-4.png)
+
+### Courbes TensorBoard
+
+À compléter : capture superposant les courbes de perte des quatre optimiseurs. Pour cette comparaison, sélectionner uniquement les expériences sans régularisation (`l1-0.0_l2-0.0`), et afficher `objective` pour la perte moyenne pendant l’entraînement ou `train_bce` pour la perte recalculée en fin d’époque.
 
 ## 4. Métriques
 
