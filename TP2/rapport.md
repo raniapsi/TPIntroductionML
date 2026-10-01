@@ -190,6 +190,14 @@ La courbe de BCE de L1 forte reste proche de 0,693, tandis que celles d’Adam e
 
 À compléter : une vue ciblée sur les quatre optimiseurs, sans lissage. Pour cette comparaison, sélectionner uniquement les expériences sans régularisation (`l1-0.0_l2-0.0`), et afficher `objective` pour la perte moyenne pendant l’entraînement ou `train_bce` pour la perte recalculée en fin d’époque.
 
+### Visualisation de la validation
+
+![Accuracy de validation des six expériences avec lissage à 0,6](images/tensorboard-validation-accuracy.png)
+
+![BCE de validation des six expériences avec lissage à 0,6](images/tensorboard-validation-bce.png)
+
+Ces vues confirment la progression plus rapide d’Adam et de RMSprop, ainsi que l’amélioration plus graduelle de Momentum. La BCE de validation présente des fluctuations pour les optimiseurs adaptatifs ; le lissage à 0,6 en atténue visuellement l’amplitude. Les valeurs numériques retenues dans le tableau comparatif proviennent des sorties brutes du script.
+
 ## 4. Métriques
 
 À faire : choisir le modèle sur la validation, évaluer sur le test et interpréter les métriques.
