@@ -26,11 +26,37 @@ python dataset.py
 
 `dataset.py` construit les ensembles 80/10/10. Le scaler est ajusté sur le train
 uniquement pour corriger la fuite de données signalée dans l’énoncé.
-La dimension d’entrée du futur MLP devra être lue depuis les données encodées.
+La dimension d’entrée du MLP est lue depuis les données encodées (16 variables).
 
-## Suite à faire ensemble
+## Expériences réalisées
 
-1. Vérifier les tailles et les dimensions affichées par le premier exercice.
-2. Créer `train.py` : MLP et régularisations L1/L2.
-3. Comparer les optimiseurs dans TensorBoard.
-4. Évaluer le modèle choisi sur le test et compléter `rapport.md`.
+```bash
+python train.py --l1 0.0001 --l2 0.001
+python train.py --l1 0.1 --l2 0
+python train.py --compare --epochs 30 --lr 0.001 --l1 0 --l2 0
+tensorboard --logdir=runs
+```
+
+`train.py` conserve les historiques CSV dans `results/`, les événements TensorBoard
+dans `runs/` et les meilleurs checkpoints selon la BCE de validation dans `checkpoints/`.
+
+## Évaluation finale
+
+```bash
+python evaluate.py
+```
+
+Par défaut, cette commande charge le checkpoint RMSprop de l’expérience réalisée
+sur le cluster, retenu à l’époque 11. Pour une nouvelle exécution de l’entraînement,
+indiquer son checkpoint explicitement :
+
+```bash
+python evaluate.py --checkpoint checkpoints/NOM_EXPERIENCE/best.pt
+```
+
+Le CSV doit rester identique : le prétraitement et les partitions sont reconstruits
+avec la graine sauvegardée. Les données, checkpoints et événements TensorBoard ne
+sont pas inclus dans Git. Ils sont conservés sur le cluster ; une nouvelle copie du
+dépôt nécessite de les récupérer ou de relancer les expériences.
+
+Le compte rendu final et les captures sont dans `rapport.md` et `images/`.

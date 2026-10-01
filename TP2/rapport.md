@@ -2,7 +2,6 @@
 
 Dans ce TP, je travaille sur la classification de données cardiovasculaires avec PyTorch. L’objectif est de préparer les données, puis d’étudier les régularisations L1/L2, de comparer plusieurs optimiseurs et d’évaluer les prédictions du modèle.
 
-> Rapport en cours : la préparation des données et la première expérience avec régularisation faible ont été exécutées sur le cluster. La comparaison avec L1 forte est également terminée. Les quatre optimiseurs ont été entraînés. La comparaison TensorBoard est terminée ; l’évaluation finale reste à réaliser.
 
 ## 1. Dataset personnalisé
 
@@ -139,7 +138,7 @@ Le script propose les optimiseurs SGD, SGD avec momentum de 0,9, RMSprop et Adam
 python train.py --compare --epochs 30 --lr 0.001 --l1 0 --l2 0
 ```
 
-La BCE d’entraînement, la BCE de validation et les accuracies sont enregistrées dans TensorBoard. Le meilleur état de chaque réseau selon la BCE de validation est conservé pour la future évaluation. Aucun choix ne repose sur le test.
+La BCE d’entraînement, la BCE de validation et les accuracies sont enregistrées dans TensorBoard. Le meilleur état de chaque réseau selon la BCE de validation est conservé pour l’évaluation finale. Aucun choix ne repose sur le test.
 
 ### Résultats des quatre optimiseurs
 
@@ -164,7 +163,7 @@ Momentum atteint dès la troisième époque une BCE de validation de 0,6104, alo
 
 ### Choix du modèle pour l’évaluation finale
 
-Le critère retenu est la plus faible BCE de validation au cours des 30 époques. RMSprop obtient 0,5358, légèrement devant Adam à 0,5369. Je retiens donc le checkpoint `best.pt` de RMSprop pour la future évaluation sur le test. Son accuracy à la dernière époque n’est pas celle de son meilleur checkpoint : il faut charger l’état sauvegardé, et non utiliser automatiquement le dernier état du réseau.
+Le critère retenu est la plus faible BCE de validation au cours des 30 époques. RMSprop obtient 0,5358, légèrement devant Adam à 0,5369. Je retiens donc le checkpoint `best.pt` de RMSprop pour l’évaluation finale sur le test. Son accuracy à la dernière époque n’est pas celle de son meilleur checkpoint : il faut charger l’état sauvegardé, et non utiliser automatiquement le dernier état du réseau.
 
 L’écart entre RMSprop et Adam reste faible et cette comparaison ne porte que sur une graine et un taux d’apprentissage commun. Elle ne démontre pas qu’un optimiseur est systématiquement supérieur aux autres. Les pertes de validation des optimiseurs adaptatifs fluctuent, ce qui justifie de conserver le meilleur état selon la validation.
 
@@ -224,4 +223,35 @@ L’aire sous la courbe ROC mesure la capacité à classer les positifs devant l
 
 ### Résultats sur le test
 
-À compléter après l’exécution sur le cluster : accuracy, précision, rappel, F1, AUC et matrice de confusion.
+J’ai évalué le meilleur checkpoint RMSprop, enregistré à l’époque 11, sur les 7 000 exemples de test. Ce checkpoint a été sélectionné uniquement à partir de la BCE de validation, avant de consulter les résultats de test. L’évaluation a été exécutée sur CUDA avec un seuil fixé à 0,5.
+
+![Évaluation finale du checkpoint RMSprop sur le test](images/evaluation-test-rmsprop.png)
+
+| Métrique | Valeur sur le test |
+| --- | ---: |
+| Accuracy | 0,7421 (74,21 %) |
+| Précision | 0,7570 (75,70 %) |
+| Rappel | 0,7103 (71,03 %) |
+| F1 | 0,7329 |
+| AUC ROC | 0,8040 |
+
+La matrice de confusion est présentée avec les classes réelles en lignes et les classes prédites en colonnes :
+
+| Classe réelle | Prédit 0 | Prédit 1 |
+| --- | ---: | ---: |
+| 0 | 2 719 vrais négatifs | 795 faux positifs |
+| 1 | 1 010 faux négatifs | 2 476 vrais positifs |
+
+Le modèle classe correctement 5 195 patients sur 7 000. Parmi les 3 271 patients prédits positifs, 2 476 sont réellement positifs, soit une précision de 75,70 %. Parmi les 3 486 patients réellement positifs, il en détecte 2 476, soit un rappel de 71,03 %. Les 1 010 faux négatifs représentent donc environ 28,97 % des cas positifs : cette proportion explique pourquoi l’accuracy seule ne suffit pas à analyser les erreurs de détection.
+
+Le F1 de 0,7329 résume le compromis entre précision et rappel. L’AUC de 0,8040 indique une capacité de classement supérieure au niveau aléatoire de 0,5, sans signifier que 80,40 % des prédictions au seuil choisi sont correctes. L’accuracy et l’AUC mesurent des propriétés différentes.
+
+Pour rechercher un rappel plus élevé, on pourrait étudier un seuil inférieur à 0,5 sur la validation, avec le risque d’augmenter les faux positifs. Cette piste n’a pas été expérimentée ici ; le seuil n’a pas été ajusté sur le test.
+
+Les valeurs affichées, arrondies à quatre décimales, sont conservées dans cette capture. Le script a également sauvegardé les résultats dans `results/RMSprop_l1-0.0_l2-0.0_20260930-164741-757241/test_metrics.json` sur le cluster.
+
+## 5. Conclusion
+
+Ce TP m’a permis de construire un dataset PyTorch en évitant d’ajuster la normalisation sur la validation et le test. La comparaison des régularisations montre qu’une L1 trop forte peut provoquer un sous-apprentissage : l’accuracy reste alors proche de 50 %. Avec le taux d’apprentissage commun retenu, RMSprop et Adam diminuent la perte plus rapidement que SGD, et le momentum améliore nettement la progression de SGD.
+
+Le checkpoint RMSprop choisi sur la validation atteint 74,21 % d’accuracy et une AUC de 0,8040 sur le test. L’analyse du rappel et de la matrice de confusion met néanmoins en évidence de nombreux cas positifs manqués. Ces résultats illustrent l’intérêt d’examiner plusieurs métriques, et pas seulement l’accuracy. La comparaison reste limitée à une graine et aux hyperparamètres testés.
