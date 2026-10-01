@@ -1,257 +1,106 @@
 # TP2 — Régularisation, optimisation et métriques
 
-Dans ce TP, je travaille sur la classification de données cardiovasculaires avec PyTorch. L’objectif est de préparer les données, puis d’étudier les régularisations L1/L2, de comparer plusieurs optimiseurs et d’évaluer les prédictions du modèle.
-
-
 ## 1. Dataset personnalisé
 
-### Chargement et préparation des données
+**Question 1.a : Pourquoi ne faut-il pas appliquer StandardScaler sur tout le dataset avant le découpage ?**
 
-J’ai placé le fichier `cardio_train.csv` dans `TP2/data/`. Le script `dataset.py` lit le CSV avec le séparateur `;`, applique la suppression des doublons prévue dans le code et retire la colonne `id`. La colonne `cardio` sert de cible : 0 pour l’absence de maladie cardiovasculaire et 1 pour sa présence.
+Cela utilise des informations de la validation et du test pour préparer les données d’entraînement. C’est une fuite de données (*data leakage*). Dans mon code, je fais donc le découpage avant de calculer la moyenne et l’écart-type sur le train seulement. J’utilise ensuite ces mêmes valeurs pour transformer la validation et le test.
 
-Les variables catégorielles `gender`, `cholesterol` et `gluc` sont transformées par encodage one-hot : une colonne indicatrice est créée pour chaque catégorie. Après cette préparation, chaque patient est représenté par 16 variables.
+**Question 1.b : Quelle classe utiliser si les données ne tiennent pas dans la RAM ?**
 
-### Interface PyTorch
+J’utiliserais `IterableDataset`, avec une lecture par morceaux pour ne pas charger toutes les données en mémoire.
 
-`__len__` renvoie le nombre d’exemples. `__getitem__` renvoie les variables
-et le label de l’exemple demandé. Le DataLoader rassemble ces exemples en lots.
-On mélange les données d’entraînement ; validation et test ne nécessitent pas de mélange.
+**Résultats de `dataset.py` :**
 
-### Fuite de données (data leakage)
+J’obtiens 56 000 exemples pour le train, 7 000 pour la validation et 7 000 pour le test, soit 80 %, 10 % et 10 %. Un batch contient 64 patients avec 16 variables chacun (`[64, 16]`) et un label par patient (`[64, 1]`).
 
-Ajuster StandardScaler sur toutes les données utilise la moyenne et l’écart-type
-des ensembles de validation et de test pour préparer l’entraînement.
-Ces ensembles doivent rester indépendants de cet ajustement.
-Dans notre code, on effectue donc le découpage avant d’ajuster le scaler sur le train,
-puis on applique la même transformation aux trois ensembles.
+![Résultat du chargement des données](images/dataset-cluster.png)
 
-### Données trop volumineuses pour la RAM
+## 2. MLP et régularisation L1/L2
 
-On utiliserait `torch.utils.data.IterableDataset` avec une lecture progressive
-(par exemple des blocs CSV via `pandas.read_csv(..., chunksize=...)`).
-Cette classe ne suffit pas seule : la lecture doit aussi éviter de tout charger en mémoire.
+**Question 2.a : Que se passe-t-il avec L1 = 0,1 et L2 = 0 ?**
 
-### Vérification sur le cluster
+J’ai comparé deux entraînements de 10 époques avec SGD et un taux d’apprentissage de 0,01.
 
-J’ai exécuté le premier script sur le nœud de calcul `starfighter-slurm-node-01-1`, dans le job Slurm 4628, avec l’environnement `deeplearning` :
-
-```bash
-source ~/miniforge3/etc/profile.d/conda.sh
-conda activate deeplearning
-cd ~/TPIntroductionML/TP2
-python dataset.py
-```
-
-![Exécution de dataset.py sur le cluster : tailles des ensembles et dimensions du premier batch](images/dataset-cluster.png)
-
-Le script affiche les résultats suivants :
-
-```text
-Tailles train / validation / test : [56000, 7000, 7000]
-Shape features: torch.Size([64, 16]) Shape labels: torch.Size([64, 1])
-Nombre de variables après encodage : 16
-```
-
-Les 70 000 exemples sont répartis en 56 000 exemples pour l’entraînement (80 %), 7 000 pour la validation (10 %) et 7 000 pour le test (10 %). Le découpage utilise une graine fixée à 42 pour être reproductible.
-
-La forme `[64, 16]` correspond à un batch de 64 patients possédant chacun 16 variables. La forme `[64, 1]` signifie que chaque patient est associé à un seul label binaire. Ces résultats confirment que le dataset et les DataLoaders peuvent fournir les lots attendus pour l’entraînement.
-
-Pour la suite, la dimension d’entrée du MLP sera déterminée à partir des données : elle vaut ici 16. Il ne faut donc pas reprendre la valeur fixe de 12 figurant dans l’un des exemples de l’énoncé.
-
-## 2. MLP et régularisations L1/L2
-
-### Architecture et fonction de coût
-
-Le script `train.py` définit un MLP avec 16 entrées, deux couches cachées de 128 neurones avec activation ReLU, puis une sortie avec activation sigmoïde. Cette sortie représente la probabilité de la classe 1. La fonction de perte utilisée est la binary cross-entropy (`BCELoss`).
-
-L’objectif optimisé ajoute deux pénalités à cette perte :
-
-$$J = \mathrm{BCE} + \lambda_1 \sum_p |p| + \lambda_2 \sum_p p^2.$$
-
-Comme dans le code de l’énoncé, ces sommes portent sur tous les paramètres, biais compris. À chaque batch, `zero_grad()` efface les gradients précédents, `backward()` calcule les nouveaux gradients et `step()` met à jour les paramètres.
-
-### Protocole de comparaison
-
-Deux expériences sont préparées avec SGD, un taux d’apprentissage de 0,01, 10 époques et la même graine :
-
-```bash
-python train.py --l1 0.0001 --l2 0.001
-python train.py --l1 0.1 --l2 0
-```
-
-Le script enregistre les résultats par époque dans `results/` au format CSV et dans `runs/` pour TensorBoard. Il distingue l’objectif avec pénalités de la BCE seule, afin de comparer les performances prédictives malgré des coefficients de régularisation différents. L’accuracy est calculée au seuil de 0,5. L’ensemble de test n’est pas utilisé à cette étape.
-
-### Résultats avec une régularisation faible
-
-J’ai exécuté `python train.py --l1 0.0001 --l2 0.001` sur le GPU du cluster pendant 10 époques. Le script confirme l’utilisation de CUDA et de 16 variables en entrée.
-
-![Entraînement sur le cluster avec une régularisation faible L1 et L2](images/regularisation-faible-cluster.png)
-
-| Mesure | Époque 1 | Époque 10 |
+| Résultat à l’époque 10 | L1 = 0,0001 et L2 = 0,001 | L1 = 0,1 et L2 = 0 |
 | --- | ---: | ---: |
-| Objectif avec pénalités, moyenne pendant l’époque | 0,8438 | 0,7314 |
-| BCE entraînement, en fin d’époque | 0,6348 | 0,5968 |
-| Accuracy entraînement | 64,57 % | 68,99 % |
-| BCE validation | 0,6272 | 0,5835 |
-| Accuracy validation | 66,09 % | 70,03 % |
-
-La BCE diminue sur l’entraînement et sur la validation. L’accuracy de validation progresse de 3,94 points de pourcentage. Le réseau apprend donc des relations utiles avec ces coefficients de régularisation. Sur les 10 époques observées, la perte de validation ne remonte pas : ces résultats ne montrent pas de signe manifeste de surapprentissage.
-
-L’accuracy de validation est légèrement supérieure à celle d’entraînement. Cela peut notamment être lié aux différences entre les exemples des deux ensembles ; cet écart seul ne permet pas de conclure à un problème. L’ensemble de test reste réservé à l’évaluation finale.
-
-### Résultats avec une régularisation L1 forte
-
-J’ai ensuite lancé `python train.py --l1 0.1 --l2 0`, avec la même initialisation et le même découpage des données.
-
-![Entraînement sur le cluster avec L1 à 0,1 et L2 à zéro](images/regularisation-forte-cluster.png)
-
-L’objectif total passe de 6,6698 à la première époque à 1,6340 dès la deuxième époque, puis reste stable à la précision affichée. Pourtant, la BCE d’entraînement reste à 0,6931 et l’accuracy de validation oscille entre 49,86 % et 50,14 %. La baisse de l’objectif ne correspond donc pas ici à une amélioration des prédictions : elle est principalement liée à la diminution de la pénalité.
-
-| Mesure à l’époque 10 | L1 = 0,0001 et L2 = 0,001 | L1 = 0,1 et L2 = 0 |
-| --- | ---: | ---: |
-| BCE entraînement | 0,5968 | 0,6931 |
-| Accuracy entraînement | 68,99 % | 50,03 % |
+| BCE train | 0,5968 | 0,6931 |
+| Accuracy train | 68,99 % | 50,03 % |
 | BCE validation | 0,5835 | 0,6931 |
 | Accuracy validation | 70,03 % | 49,86 % |
 
-Avec la régularisation forte, l’accuracy de validation perd 20,17 points de pourcentage. La BCE est proche de `ln(2) ≈ 0,6931`, valeur obtenue avec des probabilités de 0,5. Ces observations sont cohérentes avec un modèle peu informatif. Le réseau ne réussit pas non plus sur l’entraînement : c’est du **sous-apprentissage**. La pénalité L1 exerce une pression trop forte vers des paramètres proches de zéro et empêche l’apprentissage de relations utiles.
+Avec L1 à 0,1, l’accuracy reste autour de 50 % et la BCE autour de 0,6931. La pénalité est trop forte et pousse les paramètres vers zéro, ce qui empêche le réseau d’apprendre correctement. C’est du **sous-apprentissage** (*underfitting*).
 
-Les valeurs sont transcrites depuis les captures. Les historiques CSV et TensorBoard complets sont enregistrés sur le cluster.
+L’objectif total diminue de 6,6698 à 1,6340, mais les prédictions ne s’améliorent pas : cette baisse vient surtout de la pénalité. Il faut donc regarder aussi la BCE seule et l’accuracy.
 
-### Effet attendu d’une régularisation trop forte
+![Entraînement avec régularisation faible](images/regularisation-faible-cluster.png)
 
-Une pénalité trop forte peut empêcher le réseau d’apprendre les relations utiles : c’est le sous-apprentissage (underfitting). Cet effet est observé dans notre expérience avec L1 à 0,1. Il faut distinguer la BCE seule de l’objectif total qui inclut la pénalité.
+![Entraînement avec L1 forte](images/regularisation-forte-cluster.png)
 
-### Régularisation L2 dans l’optimiseur
+**Question 2.b : Quel argument permet d’appliquer L2 dans l’optimiseur ?**
 
-Avec `torch.optim.SGD`, l’argument `weight_decay` permet d’appliquer la régularisation L2. Pour reproduire une pénalité écrite sous la forme `l2_lambda * somme(p²)`, le coefficient équivalent est `weight_decay=2*l2_lambda`, car la dérivée de cette pénalité est `2*l2_lambda*p`. Il ne faut pas cumuler les deux mécanismes pour la même pénalité.
+C’est `weight_decay`. Avec SGD, pour retrouver exactement notre pénalité `l2_lambda * somme(p²)`, il faut mettre `weight_decay=2*l2_lambda`. Il ne faut pas ajouter en plus la même pénalité à la main.
 
-### Différence entre L1 et L2
+**Question 2.c : Quelle est la différence entre L1 et L2 ?**
 
-La régularisation L1 favorise des paramètres nuls ou proches de zéro et peut produire une solution parcimonieuse. L2 réduit les grandes valeurs des paramètres de manière plus progressive, sans favoriser autant leur annulation. Avec les mises à jour SGD utilisées ici, L1 ne garantit pas des zéros exacts.
+L1 favorise des poids nuls ou proches de zéro. L2 réduit surtout les grandes valeurs des poids, sans chercher autant à les annuler.
 
 ## 3. Optimiseurs et TensorBoard
 
-Le script propose les optimiseurs SGD, SGD avec momentum de 0,9, RMSprop et Adam. La comparaison réalisée utilise 30 époques, un taux d’apprentissage commun de 0,001 et aucune pénalité L1/L2, comme dans cette partie de l’énoncé. Chaque expérience réinitialise le réseau et les DataLoaders avec la même graine pour comparer les optimiseurs dans les mêmes conditions.
+J’ai comparé SGD, Momentum, RMSprop et Adam pendant 30 époques, avec un taux d’apprentissage de 0,001 et sans régularisation. Le réseau, la graine et le découpage sont les mêmes pour les quatre essais.
 
-```bash
-python train.py --compare --epochs 30 --lr 0.001 --l1 0 --l2 0
-```
+**Question 3.a : Capture des courbes de perte des quatre optimiseurs.**
 
-La BCE d’entraînement, la BCE de validation et les accuracies sont enregistrées dans TensorBoard. Le meilleur état de chaque réseau selon la BCE de validation est conservé pour l’évaluation finale. Aucun choix ne repose sur le test.
+Les quatre courbes sont affichées sans lissage. `objective` correspond ici à la BCE moyenne pendant chaque époque, puisqu’il n’y a pas de pénalité.
 
-### Résultats des quatre optimiseurs
+![Les quatre optimiseurs dans TensorBoard](images/tensorboard-quatre-optimiseurs.png)
 
-Les quatre entraînements de 30 époques se sont terminés sur le cluster. Le tableau distingue les performances de la dernière époque de la meilleure BCE de validation enregistrée pendant l’entraînement.
+| Optimiseur | BCE validation à l’époque 30 | Accuracy validation à l’époque 30 | Meilleure BCE validation |
+| --- | ---: | ---: | ---: |
+| SGD | 0,6106 | 66,63 % | 0,6106 |
+| Momentum | 0,5480 | 73,47 % | 0,5480 |
+| RMSprop | 0,5410 | 73,13 % | 0,5358 |
+| Adam | 0,5385 | 73,47 % | 0,5369 |
 
-| Optimiseur | BCE train à l’époque 30 | BCE validation à l’époque 30 | Accuracy validation à l’époque 30 | Meilleure BCE validation |
-| --- | ---: | ---: | ---: | ---: |
-| SGD | 0,6239 | 0,6106 | 66,63 % | 0,6106 |
-| Momentum | 0,5589 | 0,5480 | 73,47 % | 0,5480 |
-| RMSprop | 0,5343 | 0,5410 | 73,13 % | 0,5358 |
-| Adam | 0,5378 | 0,5385 | 73,47 % | 0,5369 |
+**Question 3.b : Quel optimiseur converge le plus vite au début ?**
 
-Ces valeurs sont transcrites depuis les sorties du terminal. Les historiques complets restent disponibles dans les fichiers CSV et les événements TensorBoard sur le cluster.
+RMSprop et Adam sont les plus rapides. Sur la perte moyenne de la première époque, RMSprop est légèrement devant : 0,5902 contre 0,5916 pour Adam. Leurs résultats restent très proches.
 
-### Vitesse d’apprentissage initiale
+**Question 3.c : Quel est l’effet du momentum par rapport à SGD simple ?**
 
-RMSprop et Adam réduisent beaucoup plus vite la perte que SGD. À la première époque, la perte moyenne pendant l’entraînement (`objectif`, égale ici à la BCE sans pénalité) vaut 0,5902 pour RMSprop, 0,5916 pour Adam, 0,6579 pour Momentum et 0,6885 pour SGD. Selon cette mesure, RMSprop a une légère avance sur Adam. En revanche, la BCE recalculée en fin de première époque sur tout le train est légèrement plus basse avec Adam (0,5794 contre 0,5800). Les deux optimiseurs adaptatifs ont donc des résultats initiaux très proches ; le classement dépend de la mesure retenue.
-
-### Effet du momentum
-
-Momentum atteint dès la troisième époque une BCE de validation de 0,6104, alors que SGD atteint 0,6106 après 30 époques. Le momentum conserve une contribution des gradients précédents, ce qui accélère la progression dans les directions persistantes et peut atténuer certaines oscillations. Dans notre expérience, il permet surtout une baisse de perte plus rapide et une meilleure accuracy finale que SGD simple.
-
-### Choix du modèle pour l’évaluation finale
-
-Le critère retenu est la plus faible BCE de validation au cours des 30 époques. RMSprop obtient 0,5358, légèrement devant Adam à 0,5369. Je retiens donc le checkpoint `best.pt` de RMSprop pour l’évaluation finale sur le test. Son accuracy à la dernière époque n’est pas celle de son meilleur checkpoint : il faut charger l’état sauvegardé, et non utiliser automatiquement le dernier état du réseau.
-
-L’écart entre RMSprop et Adam reste faible et cette comparaison ne porte que sur une graine et un taux d’apprentissage commun. Elle ne démontre pas qu’un optimiseur est systématiquement supérieur aux autres. Les pertes de validation des optimiseurs adaptatifs fluctuent, ce qui justifie de conserver le meilleur état selon la validation.
-
-### Captures des exécutions
-
-![SGD et début de Momentum](images/optimiseurs-cluster-1.png)
-
-![Fin de Momentum, RMSprop et début d’Adam](images/optimiseurs-cluster-2.png)
-
-![Historique de RMSprop et d’Adam](images/optimiseurs-cluster-3.png)
-
-![Fin de la comparaison et retour au terminal](images/optimiseurs-cluster-4.png)
-
-### Courbes TensorBoard
-
-J’ai ouvert TensorBoard à partir des événements enregistrés sur le cluster. La vue d’ensemble ci-dessous contient les six expériences, y compris les deux essais de régularisation, avec un lissage de 0,6. Les courbes lissées facilitent la lecture des tendances mais atténuent les fluctuations ; les valeurs du tableau `Value` correspondent aux mesures brutes.
-
-![Vue TensorBoard de la perte des six expériences avec lissage à 0,6](images/tensorboard-vue-ensemble-1.png)
-
-![BCE d’entraînement dans TensorBoard avec les six expériences](images/tensorboard-vue-ensemble-5.png)
-
-La courbe de BCE de L1 forte reste proche de 0,693, tandis que celles d’Adam et RMSprop diminuent rapidement. Pour ces deux optimiseurs, les courbes sont proches ; Momentum progresse plus graduellement, et SGD simple reste à une perte plus élevée après 30 époques. Les six captures originales sont conservées dans `images/tensorboard-vue-ensemble-1.png` à `images/tensorboard-vue-ensemble-6.png`.
-
-La capture suivante isole les quatre expériences sans régularisation, avec un lissage à zéro et sans exclusion des valeurs extrêmes de l’échelle. Le graphique `objective` montre la BCE moyenne pendant chaque époque.
-
-![Comparaison TensorBoard des quatre optimiseurs sans lissage](images/tensorboard-quatre-optimiseurs.png)
-
-Les courbes confirment la baisse rapide de la perte pour RMSprop et Adam, la progression plus graduelle de Momentum et la perte plus élevée de SGD. Sans lissage, les fluctuations des optimiseurs adaptatifs restent visibles.
-
-### Visualisation de la validation
-
-![Accuracy de validation des six expériences avec lissage à 0,6](images/tensorboard-validation-accuracy.png)
-
-![BCE de validation des six expériences avec lissage à 0,6](images/tensorboard-validation-bce.png)
-
-Ces vues confirment la progression plus rapide d’Adam et de RMSprop, ainsi que l’amélioration plus graduelle de Momentum. La BCE de validation présente des fluctuations pour les optimiseurs adaptatifs ; le lissage à 0,6 en atténue visuellement l’amplitude. Les valeurs numériques retenues dans le tableau comparatif proviennent des sorties brutes du script.
+Le momentum garde une partie de l’effet des gradients précédents. Cela aide à avancer plus vite dans une même direction et peut réduire les oscillations. Ici, Momentum atteint une BCE de validation de 0,6104 dès l’époque 3, alors que SGD atteint 0,6106 à l’époque 30.
 
 ## 4. Métriques
 
-### Protocole d’évaluation
+Pour le test, j’ai repris le modèle RMSprop sauvegardé à l’époque 11 : c’est celui qui avait la plus faible BCE de validation (0,5358). Le choix a été fait avant de regarder le test.
 
-Le script `evaluate.py` charge le checkpoint RMSprop retenu sur la validation et évalue les 7 000 exemples de test, sans nouvel entraînement. Il reconstruit le découpage avec la même graine et le même fichier CSV inchangé ; le scaler est ajusté exclusivement sur le train. `model.eval()` active le mode évaluation et `torch.no_grad()` désactive le calcul des gradients.
+**Résultats sur les 7 000 exemples de test, avec un seuil de 0,5 :**
 
-Les classes sont obtenues avec un seuil de 0,5. La précision, le rappel et le F1 utilisent ces classes ; l’AUC utilise les probabilités. Les résultats sont sauvegardés dans `test_metrics.json` dans le répertoire de résultats de l’expérience RMSprop.
-
-```bash
-python evaluate.py
-```
-
-### Définitions des métriques
-
-La précision (Precision) est `TP / (TP + FP)` : parmi les patients prédits positifs, elle mesure la proportion réellement positive. Le rappel (Recall) est `TP / (TP + FN)` : parmi les patients réellement positifs, il mesure la proportion détectée. L’accuracy mesure la proportion de toutes les prédictions correctes ; elle ne doit pas être confondue avec Precision. Le F1 est la moyenne harmonique de la précision et du rappel.
-
-Dans le cadre de cet exercice de détection, privilégier le rappel permet de limiter les faux négatifs, donc les cas positifs manqués. Ce choix peut augmenter les faux positifs : le compromis dépend de l’objectif et du coût des erreurs, et une forte valeur de rappel seule ne suffit pas à juger le modèle.
-
-L’aire sous la courbe ROC mesure la capacité à classer les positifs devant les négatifs à travers différents seuils. Elle ne dépend pas du seul seuil de 0,5, contrairement aux autres métriques calculées ici. Elle ne mesure pas directement la qualité de calibration des probabilités.
-
-### Résultats sur le test
-
-J’ai évalué le meilleur checkpoint RMSprop, enregistré à l’époque 11, sur les 7 000 exemples de test. Ce checkpoint a été sélectionné uniquement à partir de la BCE de validation, avant de consulter les résultats de test. L’évaluation a été exécutée sur CUDA avec un seuil fixé à 0,5.
-
-![Évaluation finale du checkpoint RMSprop sur le test](images/evaluation-test-rmsprop.png)
-
-| Métrique | Valeur sur le test |
+| Métrique | Résultat |
 | --- | ---: |
-| Accuracy | 0,7421 (74,21 %) |
-| Précision | 0,7570 (75,70 %) |
-| Rappel | 0,7103 (71,03 %) |
+| Accuracy | 74,21 % |
+| Précision | 75,70 % |
+| Rappel | 71,03 % |
 | F1 | 0,7329 |
-| AUC ROC | 0,8040 |
+| AUC | 0,8040 |
 
-La matrice de confusion est présentée avec les classes réelles en lignes et les classes prédites en colonnes :
+![Résultats de l’évaluation finale](images/evaluation-test-rmsprop.png)
 
 | Classe réelle | Prédit 0 | Prédit 1 |
 | --- | ---: | ---: |
 | 0 | 2 719 vrais négatifs | 795 faux positifs |
 | 1 | 1 010 faux négatifs | 2 476 vrais positifs |
 
-Le modèle classe correctement 5 195 patients sur 7 000. Parmi les 3 271 patients prédits positifs, 2 476 sont réellement positifs, soit une précision de 75,70 %. Parmi les 3 486 patients réellement positifs, il en détecte 2 476, soit un rappel de 71,03 %. Les 1 010 faux négatifs représentent donc environ 28,97 % des cas positifs : cette proportion explique pourquoi l’accuracy seule ne suffit pas à analyser les erreurs de détection.
+**Question 4.a : Quelle est la définition de la précision et du rappel ?**
 
-Le F1 de 0,7329 résume le compromis entre précision et rappel. L’AUC de 0,8040 indique une capacité de classement supérieure au niveau aléatoire de 0,5, sans signifier que 80,40 % des prédictions au seuil choisi sont correctes. L’accuracy et l’AUC mesurent des propriétés différentes.
+La précision est la proportion de vrais positifs parmi les patients prédits positifs : `TP / (TP + FP)`. Ici, cela donne `2476 / (2476 + 795) = 75,70 %`.
 
-Pour rechercher un rappel plus élevé, on pourrait étudier un seuil inférieur à 0,5 sur la validation, avec le risque d’augmenter les faux positifs. Cette piste n’a pas été expérimentée ici ; le seuil n’a pas été ajusté sur le test.
+Le rappel est la proportion de cas positifs détectés parmi tous les cas réellement positifs : `TP / (TP + FN)`. Ici, cela donne `2476 / (2476 + 1010) = 71,03 %`.
 
-Les valeurs affichées, arrondies à quatre décimales, sont conservées dans cette capture. Le script a également sauvegardé les résultats dans `results/RMSprop_l1-0.0_l2-0.0_20260930-164741-757241/test_metrics.json` sur le cluster.
+**Question 4.b : Dans ce contexte, faut-il privilégier la précision ou le rappel ?**
 
-## 5. Conclusion
+Je privilégierais le rappel pour manquer le moins possible de patients malades. Dans mes résultats, le modèle manque encore 1 010 cas positifs sur 3 486. Il faut quand même surveiller les faux positifs, car augmenter le rappel peut aussi augmenter les fausses alertes.
 
-Ce TP m’a permis de construire un dataset PyTorch en évitant d’ajuster la normalisation sur la validation et le test. La comparaison des régularisations montre qu’une L1 trop forte peut provoquer un sous-apprentissage : l’accuracy reste alors proche de 50 %. Avec le taux d’apprentissage commun retenu, RMSprop et Adam diminuent la perte plus rapidement que SGD, et le momentum améliore nettement la progression de SGD.
+**Question 4.c : À quoi sert l’AUC par rapport aux métriques au seuil de 0,5 ?**
 
-Le checkpoint RMSprop choisi sur la validation atteint 74,21 % d’accuracy et une AUC de 0,8040 sur le test. L’analyse du rappel et de la matrice de confusion met néanmoins en évidence de nombreux cas positifs manqués. Ces résultats illustrent l’intérêt d’examiner plusieurs métriques, et pas seulement l’accuracy. La comparaison reste limitée à une graine et aux hyperparamètres testés.
+L’AUC mesure la capacité du modèle à donner des scores plus élevés aux positifs qu’aux négatifs, en considérant différents seuils. Elle ne dépend donc pas seulement du seuil de 0,5. Ici, elle vaut 0,8040, ce qui est supérieur au niveau aléatoire de 0,5. Cela ne veut pas dire que 80,40 % des prédictions sont correctes : cette proportion est l’accuracy, qui vaut 74,21 %.
