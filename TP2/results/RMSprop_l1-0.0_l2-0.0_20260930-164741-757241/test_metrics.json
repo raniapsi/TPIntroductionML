@@ -1,0 +1,23 @@
+{
+  "n_test": 7000,
+  "threshold": 0.5,
+  "accuracy": 0.7421428571428571,
+  "precision": 0.7569550596147967,
+  "recall": 0.7102696500286861,
+  "f1": 0.732869616693799,
+  "auc": 0.8039552714476086,
+  "confusion_matrix": [
+    [
+      2719,
+      795
+    ],
+    [
+      1010,
+      2476
+    ]
+  ],
+  "checkpoint": "/mnt/hdd/homes/relhaddaoui/TPIntroductionML/TP2/checkpoints/RMSprop_l1-0.0_l2-0.0_20260930-164741-757241/best.pt",
+  "epoch": 11,
+  "validation_bce": 0.535835269519261,
+  "optimizer": "RMSprop"
+}
