@@ -180,7 +180,15 @@ L’écart entre RMSprop et Adam reste faible et cette comparaison ne porte que 
 
 ### Courbes TensorBoard
 
-À compléter : capture superposant les courbes de perte des quatre optimiseurs. Pour cette comparaison, sélectionner uniquement les expériences sans régularisation (`l1-0.0_l2-0.0`), et afficher `objective` pour la perte moyenne pendant l’entraînement ou `train_bce` pour la perte recalculée en fin d’époque.
+J’ai ouvert TensorBoard à partir des événements enregistrés sur le cluster. La vue d’ensemble ci-dessous contient les six expériences, y compris les deux essais de régularisation, avec un lissage de 0,6. Les courbes lissées facilitent la lecture des tendances mais atténuent les fluctuations ; les valeurs du tableau `Value` correspondent aux mesures brutes.
+
+![Vue TensorBoard de la perte des six expériences avec lissage à 0,6](images/tensorboard-vue-ensemble-1.png)
+
+![BCE d’entraînement dans TensorBoard avec les six expériences](images/tensorboard-vue-ensemble-5.png)
+
+La courbe de BCE de L1 forte reste proche de 0,693, tandis que celles d’Adam et RMSprop diminuent rapidement. Pour ces deux optimiseurs, les courbes sont proches ; Momentum progresse plus graduellement, et SGD simple reste à une perte plus élevée après 30 époques. Les six captures originales sont conservées dans `images/tensorboard-vue-ensemble-1.png` à `images/tensorboard-vue-ensemble-6.png`.
+
+À compléter : une vue ciblée sur les quatre optimiseurs, sans lissage. Pour cette comparaison, sélectionner uniquement les expériences sans régularisation (`l1-0.0_l2-0.0`), et afficher `objective` pour la perte moyenne pendant l’entraînement ou `train_bce` pour la perte recalculée en fin d’époque.
 
 ## 4. Métriques
 
