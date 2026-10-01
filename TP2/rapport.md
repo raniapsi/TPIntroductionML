@@ -2,7 +2,7 @@
 
 Dans ce TP, je travaille sur la classification de données cardiovasculaires avec PyTorch. L’objectif est de préparer les données, puis d’étudier les régularisations L1/L2, de comparer plusieurs optimiseurs et d’évaluer les prédictions du modèle.
 
-> Rapport en cours : la préparation des données et la première expérience avec régularisation faible ont été exécutées sur le cluster. La comparaison avec L1 forte est également terminée. Les quatre optimiseurs ont été entraînés. La capture TensorBoard et l’évaluation finale restent à réaliser.
+> Rapport en cours : la préparation des données et la première expérience avec régularisation faible ont été exécutées sur le cluster. La comparaison avec L1 forte est également terminée. Les quatre optimiseurs ont été entraînés. La comparaison TensorBoard est terminée ; l’évaluation finale reste à réaliser.
 
 ## 1. Dataset personnalisé
 
@@ -188,7 +188,11 @@ J’ai ouvert TensorBoard à partir des événements enregistrés sur le cluster
 
 La courbe de BCE de L1 forte reste proche de 0,693, tandis que celles d’Adam et RMSprop diminuent rapidement. Pour ces deux optimiseurs, les courbes sont proches ; Momentum progresse plus graduellement, et SGD simple reste à une perte plus élevée après 30 époques. Les six captures originales sont conservées dans `images/tensorboard-vue-ensemble-1.png` à `images/tensorboard-vue-ensemble-6.png`.
 
-À compléter : une vue ciblée sur les quatre optimiseurs, sans lissage. Pour cette comparaison, sélectionner uniquement les expériences sans régularisation (`l1-0.0_l2-0.0`), et afficher `objective` pour la perte moyenne pendant l’entraînement ou `train_bce` pour la perte recalculée en fin d’époque.
+La capture suivante isole les quatre expériences sans régularisation, avec un lissage à zéro et sans exclusion des valeurs extrêmes de l’échelle. Le graphique `objective` montre la BCE moyenne pendant chaque époque.
+
+![Comparaison TensorBoard des quatre optimiseurs sans lissage](images/tensorboard-quatre-optimiseurs.png)
+
+Les courbes confirment la baisse rapide de la perte pour RMSprop et Adam, la progression plus graduelle de Momentum et la perte plus élevée de SGD. Sans lissage, les fluctuations des optimiseurs adaptatifs restent visibles.
 
 ### Visualisation de la validation
 
@@ -200,4 +204,24 @@ Ces vues confirment la progression plus rapide d’Adam et de RMSprop, ainsi que
 
 ## 4. Métriques
 
-À faire : choisir le modèle sur la validation, évaluer sur le test et interpréter les métriques.
+### Protocole d’évaluation
+
+Le script `evaluate.py` charge le checkpoint RMSprop retenu sur la validation et évalue les 7 000 exemples de test, sans nouvel entraînement. Il reconstruit le découpage avec la même graine et le même fichier CSV inchangé ; le scaler est ajusté exclusivement sur le train. `model.eval()` active le mode évaluation et `torch.no_grad()` désactive le calcul des gradients.
+
+Les classes sont obtenues avec un seuil de 0,5. La précision, le rappel et le F1 utilisent ces classes ; l’AUC utilise les probabilités. Les résultats sont sauvegardés dans `test_metrics.json` dans le répertoire de résultats de l’expérience RMSprop.
+
+```bash
+python evaluate.py
+```
+
+### Définitions des métriques
+
+La précision (Precision) est `TP / (TP + FP)` : parmi les patients prédits positifs, elle mesure la proportion réellement positive. Le rappel (Recall) est `TP / (TP + FN)` : parmi les patients réellement positifs, il mesure la proportion détectée. L’accuracy mesure la proportion de toutes les prédictions correctes ; elle ne doit pas être confondue avec Precision. Le F1 est la moyenne harmonique de la précision et du rappel.
+
+Dans le cadre de cet exercice de détection, privilégier le rappel permet de limiter les faux négatifs, donc les cas positifs manqués. Ce choix peut augmenter les faux positifs : le compromis dépend de l’objectif et du coût des erreurs, et une forte valeur de rappel seule ne suffit pas à juger le modèle.
+
+L’aire sous la courbe ROC mesure la capacité à classer les positifs devant les négatifs à travers différents seuils. Elle ne dépend pas du seul seuil de 0,5, contrairement aux autres métriques calculées ici. Elle ne mesure pas directement la qualité de calibration des probabilités.
+
+### Résultats sur le test
+
+À compléter après l’exécution sur le cluster : accuracy, précision, rappel, F1, AUC et matrice de confusion.
