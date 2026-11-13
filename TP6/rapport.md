@@ -461,3 +461,85 @@ Les threads doivent se synchroniser et partager la mémoire, et certaines opéra
 La quantification dynamique classique agit surtout sur les couches linéaires. Dans ResNet, une grande partie des calculs vient des convolutions : le gain serait donc limité.
 
 La quantification statique utilisée dans ce TP calibre les activations et permet aussi de quantifier ces convolutions.
+
+## Rapport final — Synthèse
+
+### Question 1 = Comment comparer toutes les configurations mesurées ?
+
+Le tableau regroupe les résultats obtenus. Les lignes « entraînement court » correspondent à des époques complètes. Les autres mesures d’entraînement sont des benchmarks sur plusieurs pas. « Non mesuré » signifie que je n’ai pas de valeur pour cette expérience.
+
+| Configuration | Matériel | Données | Débit (images/s) | Pic mémoire GPU (Go) | Temps par époque (s) |
+| --- | --- | --- | ---: | ---: | ---: |
+| Référence FP32 synthétique | H100 NVL | Synthétiques | 820,7 | 5,93 | — |
+| Référence FP32 réelle, 3 workers | H100 NVL | raw | 801,1 | 5,93 | 16,4 |
+| FP32, 0 worker | H100 NVL | raw | 213,7 | 5,93 | — |
+| FP32, 1 worker | H100 NVL | raw | 284,4 | 5,93 | — |
+| FP32, 2 workers | H100 NVL | raw | 726,3 | 5,93 | — |
+| FP32, 3 workers | H100 NVL | raw | 768,4 | 5,93 | — |
+| FP32, 3 workers, sans pin_memory | H100 NVL | raw | 706,8 | 5,93 | — |
+| FP32, 0 worker | H100 NVL | small | 346,6 | 5,93 | — |
+| FP32, 3 workers | H100 NVL | small | 757,6 | 5,93 | — |
+| FP32, seconde série | H100 NVL | Synthétiques | 788,6 | 5,93 | — |
+| TF32 | H100 NVL | Synthétiques | 1 567,9 | 5,93 | — |
+| BF16 | H100 NVL | Synthétiques | 1 906,8 | 3,29 | — |
+| BF16 + channels_last | H100 NVL | Synthétiques | 2 561,8 | 3,29 | — |
+| BF16 + channels_last + compile | H100 NVL | Synthétiques | 2 566,7 | 3,24 | — |
+| BF16 + channels_last, 1 worker | H100 NVL | raw | 195,8 | 3,29 | — |
+| BF16 + channels_last + compile, 1 worker | H100 NVL | raw | 233,5 | 3,18 | — |
+| BF16 + channels_last, 3 workers | H100 NVL | raw | 1 117,1 | 3,29 | — |
+| BF16 + channels_last + compile, 3 workers | H100 NVL | raw | 1 539,7 | 3,18 | — |
+| BF16 + channels_last, 1 worker | H100 NVL | small | 403,3 | 3,29 | — |
+| BF16 + channels_last + compile, 1 worker | H100 NVL | small | 541,8 | 3,18 | — |
+| BF16 + channels_last, 3 workers | H100 NVL | small | 1 820,8 | 3,29 | — |
+| BF16 + channels_last + compile, 3 workers | H100 NVL | small | 1 393,3 | 3,18 | — |
+| Entraînement court BF16, première époque | H100 NVL | small | 725,0 | Non mesuré | 17,7 |
+| Entraînement court BF16, deuxième époque | H100 NVL | small | 1 168,2 | Non mesuré | 11,0 |
+| BF16 + channels_last, 1 GPU | 1 L4 | Synthétiques | 457,8 | Non mesuré | — |
+| BF16 + channels_last, 2 GPU | 2 L4 | Synthétiques | 147,7 | Non mesuré | — |
+| BF16 + channels_last, 2 GPU, hook BF16 | 2 L4 | Synthétiques | 276,1 | Non mesuré | — |
+| BF16 + channels_last, 1 GPU, accumulation 8 | 1 L4 | Synthétiques | 479,9 | Non mesuré | — |
+| BF16 + channels_last, 2 GPU, hook BF16, accumulation 8 | 2 L4 | Synthétiques | 736,9 | Non mesuré | — |
+
+Pour l’inférence, je compare surtout la latence d’une image et la taille des poids. Ce n’est pas le même travail que l’entraînement : il n’y a ni backward ni mise à jour des poids.
+
+| Variante CPU | Threads | Calibration | Latence par image (ms) | Poids (Mo) | Top-1 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| FP32 sans compilation | 4 | — | 55,29 | 94,3 | 99,4 % |
+| FP32 compilé | 4 | — | 22,50 | 94,3 | 99,4 % |
+| BF16 compilé | 4 | — | 15,80 | 47,2 | 99,2 % |
+| INT8 compilé | 4 | 200 | 13,42 | 23,9 | 99,6 % |
+| INT8 compilé | 4 | 10 | 10,13 | 23,9 | 99,4 % |
+| FP32 compilé | 1 | — | 72,40 | 94,3 | 99,4 % |
+| INT8 compilé | 1 | 200 | 28,23 | 23,9 | 99,6 % |
+
+Les mesures CPU proviennent du même job 54766, sur l’AMD EPYC 9354. Le temps par époque et le pic mémoire GPU ne s’appliquent pas à ces mesures d’inférence sur CPU.
+
+![Résultats de référence et des optimisations sur la H100](captures/resultats-bench.png)
+
+![Résultats DDP sur les deux L4](captures/resultats-ddp.png)
+
+![Résultats d’inférence CPU du travail 54766](captures/quantification-job-54766.png)
+
+### Question 2 = Pourquoi le DDP n’atteint-il pas une accélération idéale de deux ?
+
+Avec un GPU, je mesure **457,8 images/s**. Avec deux GPU sans accumulation, le débit descend à **147,7 images/s**. Le test réseau aide à comprendre ce résultat : un échange de **102 Mo prend 880 ms**, alors qu’un pas sur un GPU ne prend que **139,8 ms**. Les échanges de gradients coûtent donc plus cher que le calcul local.
+
+Le modèle de communication donne environ **811 ms pour 94 Mo de gradients**, avec environ **84 ms de calcul cachées par les échanges**. Le hook BF16 réduit ce coût en envoyant moins de données. Avec huit micro-batches accumulés, on communique moins souvent et le débit passe de **479,9 images/s sur un GPU à 736,9 sur deux**, soit **×1,54 au lieu de ×2**.
+
+Ces benchmarks DDP utilisent des données synthétiques déjà sur le GPU. Le chargement des images n’explique donc pas leur perte d’efficacité. En revanche, DDP doit synchroniser les processus : les plus rapides attendent les plus lents et les échanges ajoutent du temps. Nos mesures ne séparent pas précisément cette attente du coût de communication. Je ne peux donc pas donner une part chiffrée indépendante pour chacun.
+
+![Mesures de communication entre les deux nœuds](captures/communication-all-reduce.png)
+
+![Débits DDP avec et sans compression et accumulation](captures/resultats-ddp.png)
+
+### Question 3 = Quelle configuration choisir pour entraîner puis déployer le modèle ?
+
+Pour cet entraînement court sur le cluster, je choisirais **une H100, BF16, channels_last, les images small, trois workers et pin_memory**, avec un batch de 64 et **sans compilation**. Cette configuration donne le meilleur débit réel médian de la série, **1 820,8 images/s**, même si les répétitions varient beaucoup. La deuxième époque complète prend **11,0 s**, contre **16,4 s pour la référence FP32**. La compilation apporte très peu sur le synthétique et coûte trop de temps pour seulement deux époques.
+
+Je garderais un seul GPU pour ce cas. Sur les L4, deux GPU sans accumulation sont plus lents qu’un seul à cause du réseau. L’accumulation avec compression améliore le débit, mais change le batch global et demande de revoir les réglages d’apprentissage. Les comparaisons de débit entre H100 et L4 ne mesurent pas l’effet du seul nombre de GPU, car les cartes sont différentes.
+
+Pour le déploiement CPU, je choisirais **INT8 compilé avec 200 images de calibration**. Avec quatre threads, il utilise **23,9 Mo de poids**, traite une image en **13,42 ms** et garde **99,6 % de top-1** sur les 500 images évaluées. Les poids sont **3,95 fois plus petits** et l’inférence **1,68 fois plus rapide** qu’en FP32 compilé. Je retiens 200 images plutôt que dix, car l’accord avec FP32 est meilleur. Le choix de quatre threads serait ensuite à vérifier selon le nombre de requêtes à traiter en même temps.
+
+![Temps et précision de l’entraînement retenu](captures/entrainement-deux-epoques.png)
+
+![Compromis entre taille, latence et précision sur CPU](captures/quantification-job-54766.png)
